@@ -1,0 +1,49 @@
+---
+- hosts: all
+  remote_user: ec2-user
+  sudo: True
+
+  vars:
+   leftprivip: '172.31.21.223'
+   rightprivip: '172.31.21.224'
+
+  tasks:
+  - name: install the openswan
+    yum: name=openswan state=latest
+
+  - name: clean config
+    with_items: [ /etc/ipsec.d, /etc/ipsec.secrets ]
+    file: path={{ item }} state=absent
+
+  - name: create /etc/ipsec.d dir
+    file: path=/etc/ipsec.d state=directory owner=root group=root mode=0755
+
+  - name: create password files
+    shell: date | md5sum > /etc/ipsec.d/password
+
+  - name: genereate new certs
+    command: certutil -N -d /etc/ipsec.d/ -f /etc/ipsec.d/passoword
+
+  - name: Generate key
+    command: ipsec newhostkey --configdir /etc/ipsec.d --output /etc/ipsec.secrets
+
+  - name: Get Key left
+    delegate_to: 54.191.84.184
+    command:  ipsec showhostkey --left
+    register: left_key
+
+
+  - name: Get Key right
+    delegate_to: 54.200.226.4
+    command:  ipsec showhostkey --right
+    register: right_key
+
+  - name: copy config file
+    template: src=ipsec.conf dest=/etc/ipsec.conf
+
+
+
+
+  handlers:
+    - name: start ipsec
+      service: name=ipsec state=started
